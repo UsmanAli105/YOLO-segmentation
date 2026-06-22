@@ -36,7 +36,8 @@ jobs:
             ./ $USER@$HOST:~/app/
 
           # 4. SSH into the instance and run Docker Compose
-          ssh -i ~/.ssh/id_rsa $USER@$HOST << 'EOF'
+          # Added keep-alive options so long builds don't drop the connection
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -i ~/.ssh/id_rsa $USER@$HOST << 'EOF'
             cd ~/app
             
             # Restart the application with the new code
@@ -46,3 +47,20 @@ jobs:
             # Clean up dangling images to save space
             docker image prune -f
           EOF
+
+      - name: Verify Deployment (Health Check)
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "Waiting for API to start..."
+          # Retry up to 12 times (waiting 5 seconds between each)
+          for i in {1..12}; do
+            if curl -sSf http://$HOST:8000/health > /dev/null; then
+              echo "✅ Health check passed! The API is live and responding."
+              exit 0
+            fi
+            echo "Health check pending... (Attempt $i/12)"
+            sleep 5
+          done
+          echo "❌ Health check failed after 60 seconds. The container might be crash-looping."
+          exit 1
