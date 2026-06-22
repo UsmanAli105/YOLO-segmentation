@@ -1,0 +1,114 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+
+# ============================================================
+# Virtual Environments
+# ============================================================
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# ============================================================
+# Distribution / Packaging
+# ============================================================
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ============================================================
+# Testing & Coverage
+# ============================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+nosetests.xml
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ============================================================
+# SSH Keys & Certificates — NEVER commit these
+# ============================================================
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# ============================================================
+# Secrets & Sensitive Environment Files
+# Use .env.example as a safe template instead
+# ============================================================
+.env
+.env.secret
+.env.production
+secrets.json
+
+# ============================================================
+# Runtime Artifacts — generated at runtime, not source code
+# ============================================================
+logs/*.log
+logs/*.log.*
+
+uploads/*
+!uploads/.gitkeep
+
+outputs/*
+!outputs/.gitkeep
+
+temp/*
+!temp/.gitkeep
+
+# ============================================================
+# Model Weights — large binary files, download separately
+# See README for how to obtain the model
+# ============================================================
+models/*.pt
+models/*.onnx
+models/*.engine
+models/*.tflite
+
+# ============================================================
+# Stress Test & Ad-hoc Test Images — local dev tools only
+# ============================================================
+stress_test.py
+test_images/
+stress_results/
+benchmark_*.json
+
+# ============================================================
+# Jupyter Notebooks checkpoints
+# ============================================================
+.ipynb_checkpoints/
