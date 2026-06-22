@@ -1,0 +1,48 @@
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Virtual environment ─────────────────────────────────────────
+venv/
+env/
+.venv/
+
+# ── Git ─────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Model weights (downloaded via curl during build) ────────────
+models/
+
+# ── IDE ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Testing (not needed in production image) ────────────────────
+tests/
+.pytest_cache/
+.coverage
+
+# ── Runtime artifacts (mounted as volumes) ──────────────────────
+logs/
+uploads/
+outputs/
+temp/
+
+# ── Secrets & keys ──────────────────────────────────────────────
+*.pem
+*.key
+*.ppk
+
+# ── Local dev tools ─────────────────────────────────────────────
+stress_test.py
+test_images/
+
+# ── OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Docs ────────────────────────────────────────────────────────
+README.md

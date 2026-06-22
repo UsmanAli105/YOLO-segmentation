@@ -1,0 +1,48 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ubuntu
+        run: |
+          # 1. Save the private key to a file and set permissions
+          mkdir -p ~/.ssh
+          echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # 2. Add the EC2 host to known_hosts to prevent SSH prompts
+          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
+
+          # 3. Rsync the project files to the EC2 instance
+          # This copies the latest code directly to ~/app
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            -e "ssh -i ~/.ssh/id_rsa" \
+            ./ $USER@$HOST:~/app/
+
+          # 4. SSH into the instance and run Docker Compose
+          ssh -i ~/.ssh/id_rsa $USER@$HOST << 'EOF'
+            cd ~/app
+            
+            # Restart the application with the new code
+            docker compose down
+            docker compose up --build -d
+            
+            # Clean up dangling images to save space
+            docker image prune -f
+          EOF
