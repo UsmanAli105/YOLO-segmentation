@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yolo-deployment
+  namespace: yolo-segmentation
+  labels:
+    app: yolo-segmentation
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: yolo-segmentation
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: yolo-segmentation
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: yolo-api
+          image: yolo-segmentation:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: yolo-config
+            - secretRef:
+                name: yolo-secrets
+          resources:
+            requests:
+              cpu: "1000m"      # 1 vCPU
+              memory: "1Gi"     # 1 GB RAM
+            limits:
+              cpu: "2000m"      # 2 vCPU
+              memory: "2Gi"     # 2 GB RAM
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
