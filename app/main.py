@@ -173,3 +173,10 @@ async def health_check():
             "queue_capacity_remaining": max(0, settings.max_queue_size - queued)
         }
     }
+
+@app.get("/hello-world", tags=["Hello"], summary="Say Hello")
+async def hello_world():
+    """
+    A simple hello world service endpoint.
+    """
+    return {"message": "Hello World!"}
