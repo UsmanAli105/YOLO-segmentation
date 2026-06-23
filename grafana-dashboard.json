@@ -32,7 +32,7 @@
       "title": "Rate Limit Violations (429)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "targets": [
-        { "expr": "sum(rate(http_rate_limit_violations_total_total[1m]))", "legendFormat": "Violations/sec" }
+        { "expr": "sum(rate(http_rate_limit_violations_total[1m]))", "legendFormat": "Violations/sec" }
       ]
     },
     {
