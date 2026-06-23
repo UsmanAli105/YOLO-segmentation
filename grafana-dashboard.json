@@ -1,0 +1,48 @@
+{
+  "title": "YOLOv8 Segmentation Metrics",
+  "tags": ["yolo", "fastapi"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active Inferences",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(active_inferences)", "legendFormat": "Inferences" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Queued Inferences",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(queued_inferences)", "legendFormat": "Queued" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests by Status",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total[1m])) by (status_code)", "legendFormat": "Status {{status_code}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate Limit Violations (429)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(http_rate_limit_violations_total_total[1m]))", "legendFormat": "Violations/sec" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average YOLO Inference Duration",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(yolo_inference_duration_seconds_sum[1m])) / sum(rate(yolo_inference_duration_seconds_count[1m]))", "legendFormat": "Avg Duration (s)" }
+      ]
+    }
+  ],
+  "schemaVersion": 38
+}
