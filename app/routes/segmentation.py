@@ -1,6 +1,7 @@
 import os
+import asyncio
 import logging
-from fastapi import APIRouter, UploadFile, File, Request, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Request, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import FileResponse
 
 from app.config import settings
@@ -10,6 +11,7 @@ from app.utils.file_utils import (
     generate_secure_path,
     cleanup_file,
 )
+from app.utils.rate_limit import check_rate_limit
 from app.services.yolo_service import run_segmentation
 
 # Configure logging
@@ -17,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/segment", summary="Perform YOLOv8 instance segmentation on an uploaded image")
+@router.post(
+    "/segment", 
+    summary="Perform YOLOv8 instance segmentation on an uploaded image",
+    dependencies=[Depends(check_rate_limit)]
+)
 async def segment_image(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -84,8 +90,34 @@ async def segment_image(
 
         model = request.app.state.model
 
-        # 6. Run segmentation and generate the output image
-        run_segmentation(model, input_path, output_path)
+        # 6. Check queue capacity and run segmentation using concurrency limits
+        semaphore = request.app.state.inference_semaphore
+        
+        # Check if the queue is full before waiting
+        if request.app.state.queued_inferences >= settings.max_queue_size:
+            logger.warning("Rejected file upload: server is too busy (queue full).")
+            raise HTTPException(
+                status_code=503,
+                detail="The server is currently experiencing high load. Please try again later."
+            )
+            
+        request.app.state.queued_inferences += 1
+        try:
+            # Wait for an available concurrency slot
+            async with semaphore:
+                request.app.state.queued_inferences -= 1
+                request.app.state.active_inferences += 1
+                try:
+                    logger.debug("Starting background thread for inference.")
+                    # Run inference in a threadpool to avoid blocking the main event loop
+                    await asyncio.to_thread(run_segmentation, model, input_path, output_path)
+                finally:
+                    request.app.state.active_inferences -= 1
+        except Exception:
+            # If an error happens while waiting for semaphore, we need to decrement the queue
+            if request.app.state.queued_inferences > 0:
+                request.app.state.queued_inferences -= 1
+            raise
 
         # 7. Schedule files for deletion after the response is completed based on settings
         if settings.delete_upload_after_response:

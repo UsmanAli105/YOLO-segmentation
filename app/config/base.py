@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     # Health Endpoint Settings
     health_endpoint_enabled: bool = True
 
+    # Resilience Settings
+    max_concurrent_inferences: int = 4
+    max_queue_size: int = 20
+    rate_limit_requests: int = 100
+    rate_limit_window_seconds: int = 60
+
     # Configuration for Pydantic Settings
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",
