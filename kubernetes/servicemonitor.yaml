@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: yolo-servicemonitor
+  namespace: yolo-segmentation
+  labels:
+    release: monitoring # Must match the helm release name so the operator picks it up
+spec:
+  selector:
+    matchLabels:
+      app: yolo-segmentation
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
