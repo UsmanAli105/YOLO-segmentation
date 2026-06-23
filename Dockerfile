@@ -1,41 +1,58 @@
 # ─────────────────────────────────────────────────────────────
-#  YOLOv8 Segmentation API — Production Dockerfile
-#  Base: python:3.12-slim  |  Port: 8000
+#  Stage 1: Builder
 # ─────────────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies to a local folder prefix
+# The requirements.txt now enforces CPU-only PyTorch wheels
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Download YOLOv8 model weights
+RUN mkdir -p /models && \
+    curl -fsSL https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n-seg.pt \
+    -o /models/yolov8n-seg.pt
+
+# ─────────────────────────────────────────────────────────────
+#  Stage 2: Production Runtime
+# ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
-# Keeps Python from writing .pyc files and enables real-time log output
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    APP_ENV=local
-
-# ── System dependencies ────────────────────────────────────────
-# libgl1 + libglib2.0-0 are required by OpenCV (used inside YOLOv8)
-# curl is used to download model weights at build time
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0t64 \
-    curl \
- && rm -rf /var/lib/apt/lists/*
+    APP_ENV=prod
 
 WORKDIR /app
 
-# ── Python dependencies (separate layer — cached unless requirements change) ──
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install only the bare minimum runtime system dependencies for OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0t64 \
+ && rm -rf /var/lib/apt/lists/* \
+ && apt-get clean
 
-# ── Application source ─────────────────────────────────────────
-COPY app/         ./app/
-COPY .env.local   .env.dev   .env.sit   .env.uat   .env.prod   ./
+# Copy compiled Python packages and CLI tools from the builder stage
+COPY --from=builder /install /usr/local
 
-# ── Model weights (downloaded from Ultralytics GitHub at build time) ──
-RUN mkdir -p models && \
-    curl -fsSL https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n-seg.pt \
-    -o models/yolov8n-seg.pt
+# Copy the pre-downloaded YOLO model weights
+COPY --from=builder /models /app/models
 
-# ── Runtime directories (logs, uploads, outputs, temp) ────────
-RUN mkdir -p logs uploads outputs temp
+# Copy application source code and environment configs
+COPY app/ ./app/
+COPY .env.* ./
+
+# Create runtime directories with wide permissions for local logging/temp files
+RUN mkdir -p logs uploads outputs temp && \
+    chmod -R 777 logs uploads outputs temp
 
 # ── Expose port ────────────────────────────────────────────────
 EXPOSE 8000

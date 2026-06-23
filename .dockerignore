@@ -24,6 +24,10 @@ models/
 tests/
 .pytest_cache/
 .coverage
+requirements-test.txt
+
+# ── Kubernetes Manifests ────────────────────────────────────────
+kubernetes/
 
 # ── Runtime artifacts (mounted as volumes) ──────────────────────
 logs/
