@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: yolo-service
   namespace: yolo-segmentation
+  labels:
+    app: yolo-segmentation
 spec:
   type: ClusterIP
   selector:
