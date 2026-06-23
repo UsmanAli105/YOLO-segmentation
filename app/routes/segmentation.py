@@ -1,4 +1,5 @@
 import os
+import time
 import asyncio
 import logging
 from fastapi import APIRouter, UploadFile, File, Request, HTTPException, BackgroundTasks, Depends
@@ -13,6 +14,7 @@ from app.utils.file_utils import (
 )
 from app.utils.rate_limit import check_rate_limit
 from app.services.yolo_service import run_segmentation
+from app.utils import metrics
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -95,6 +97,8 @@ async def segment_image(
         
         # Check if the queue is full before waiting
         if request.app.state.queued_inferences >= settings.max_queue_size:
+            if settings.enable_metrics:
+                metrics.REJECTED_REQUESTS.inc()
             logger.warning("Rejected file upload: server is too busy (queue full).")
             raise HTTPException(
                 status_code=503,
@@ -102,21 +106,36 @@ async def segment_image(
             )
             
         request.app.state.queued_inferences += 1
+        if settings.enable_metrics:
+            metrics.QUEUED_INFERENCES.set(request.app.state.queued_inferences)
+            
         try:
             # Wait for an available concurrency slot
             async with semaphore:
                 request.app.state.queued_inferences -= 1
                 request.app.state.active_inferences += 1
+                if settings.enable_metrics:
+                    metrics.QUEUED_INFERENCES.set(request.app.state.queued_inferences)
+                    metrics.ACTIVE_INFERENCES.set(request.app.state.active_inferences)
+                    
                 try:
                     logger.debug("Starting background thread for inference.")
+                    inference_start = time.time()
                     # Run inference in a threadpool to avoid blocking the main event loop
                     await asyncio.to_thread(run_segmentation, model, input_path, output_path)
+                    
+                    if settings.enable_metrics:
+                        metrics.INFERENCE_DURATION.observe(time.time() - inference_start)
                 finally:
                     request.app.state.active_inferences -= 1
+                    if settings.enable_metrics:
+                        metrics.ACTIVE_INFERENCES.set(request.app.state.active_inferences)
         except Exception:
             # If an error happens while waiting for semaphore, we need to decrement the queue
             if request.app.state.queued_inferences > 0:
                 request.app.state.queued_inferences -= 1
+                if settings.enable_metrics:
+                    metrics.QUEUED_INFERENCES.set(request.app.state.queued_inferences)
             raise
 
         # 7. Schedule files for deletion after the response is completed based on settings

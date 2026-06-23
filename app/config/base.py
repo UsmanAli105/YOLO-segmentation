@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Logging Settings
     log_level: str = "INFO"
-    log_format: str = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    log_format: str = "%(asctime)s [%(levelname)s] [%(request_id)s] %(name)s: %(message)s"
     log_file_path: str = "app.log"
     enable_console_logging: bool = True
     enable_file_logging: bool = True
@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     max_queue_size: int = 20
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
+
+    # Observability Settings
+    enable_metrics: bool = True
+    enable_request_tracing: bool = True
 
     # Configuration for Pydantic Settings
     model_config = SettingsConfigDict(

@@ -1,6 +1,13 @@
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+from app.utils.tracing import request_id
+
+class RequestIdFilter(logging.Filter):
+    """Injects the current request_id into log records."""
+    def filter(self, record):
+        record.request_id = request_id.get()
+        return True
 
 def setup_logging(settings) -> None:
     """
@@ -21,12 +28,14 @@ def setup_logging(settings) -> None:
     
     # Formatter for application logs
     formatter = logging.Formatter(settings.log_format)
+    request_filter = RequestIdFilter()
     
     # 2. Add root console handler
     if settings.enable_console_logging:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         console_handler.setLevel(log_level)
+        console_handler.addFilter(request_filter)
         root_logger.addHandler(console_handler)
         
     # 3. Add root rotating file handlers
@@ -40,6 +49,7 @@ def setup_logging(settings) -> None:
         )
         app_handler.setFormatter(formatter)
         app_handler.setLevel(log_level)
+        app_handler.addFilter(request_filter)
         root_logger.addHandler(app_handler)
         
         # error.log for error logs only (ERROR and CRITICAL)
@@ -51,6 +61,7 @@ def setup_logging(settings) -> None:
         )
         error_handler.setFormatter(formatter)
         error_handler.setLevel(logging.ERROR)
+        error_handler.addFilter(request_filter)
         root_logger.addHandler(error_handler)
         
     # 4. Setup dedicated access logger
@@ -63,12 +74,13 @@ def setup_logging(settings) -> None:
         access_logger.removeHandler(handler)
         
     # Formatter for access logs (timestamp and message)
-    access_formatter = logging.Formatter("%(asctime)s - %(message)s")
+    access_formatter = logging.Formatter("%(asctime)s [%(request_id)s] - %(message)s")
     
     if settings.enable_console_logging:
         access_console = logging.StreamHandler()
         access_console.setFormatter(access_formatter)
         access_console.setLevel(logging.INFO)
+        access_console.addFilter(request_filter)
         access_logger.addHandler(access_console)
         
     if settings.enable_file_logging:
@@ -80,4 +92,5 @@ def setup_logging(settings) -> None:
         )
         access_file_handler.setFormatter(access_formatter)
         access_file_handler.setLevel(logging.INFO)
+        access_file_handler.addFilter(request_filter)
         access_logger.addHandler(access_file_handler)

@@ -1,13 +1,18 @@
 import os
 import time
+import uuid
 import logging
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
 from ultralytics import YOLO
+from prometheus_client import make_asgi_app
 
 from app.config import settings, env
 from app.utils.logging_config import setup_logging
+from app.utils.tracing import request_id
+from app.utils import metrics
 from app.routes.segmentation import router as segmentation_router
 
 # Configure centralized root and access logging
@@ -70,17 +75,51 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+if settings.enable_metrics:
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
+
+@app.middleware("http")
+async def request_tracing_middleware(request: Request, call_next):
+    """
+    Extracts or generates a unique Request ID, sets it in context, 
+    and appends it to the response headers.
+    """
+    if not settings.enable_request_tracing:
+        return await call_next(request)
+        
+    req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    token = request_id.set(req_id)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = req_id
+        return response
+    finally:
+        request_id.reset(token)
+
 # Request logging middleware to track HTTP requests and log metrics to access.log
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_and_measure_requests(request: Request, call_next):
     start_time = time.time()
     client_ip = request.client.host if request.client else "unknown"
     method = request.method
     path = request.url.path
     
+    # Do not track metrics endpoint itself
+    if path == "/metrics":
+        return await call_next(request)
+    
+    if settings.enable_metrics:
+        metrics.ACTIVE_REQUESTS.inc()
+        
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+        
+        if settings.enable_metrics:
+            metrics.REQUESTS_TOTAL.labels(method=method, endpoint=path, status_code=response.status_code).inc()
+            metrics.REQUEST_DURATION.labels(method=method, endpoint=path).observe(process_time / 1000)
+            
         access_logger.info(
             "%s - \"%s %s\" %d - %.2fms",
             client_ip, method, path, response.status_code, process_time
@@ -88,11 +127,22 @@ async def log_requests(request: Request, call_next):
         return response
     except Exception as e:
         process_time = (time.time() - start_time) * 1000
+        status_code = 500
+        if isinstance(e, HTTPException):
+            status_code = e.status_code
+            
+        if settings.enable_metrics:
+            metrics.REQUESTS_TOTAL.labels(method=method, endpoint=path, status_code=status_code).inc()
+            metrics.REQUEST_DURATION.labels(method=method, endpoint=path).observe(process_time / 1000)
+            
         access_logger.error(
             "%s - \"%s %s\" 500 (Error: %s) - %.2fms",
             client_ip, method, path, str(e), process_time
         )
         raise e
+    finally:
+        if settings.enable_metrics:
+            metrics.ACTIVE_REQUESTS.dec()
 
 # Register routes
 app.include_router(segmentation_router, tags=["Segmentation"])
