@@ -84,6 +84,9 @@ def test_middleware_exception_logging(tmp_path):
     from app.main import app
 
     try:
+        # Save original state
+        original_state = app.state
+        
         # Create a local client instance that handles server exceptions instead of re-raising them
         with TestClient(app, raise_server_exceptions=False) as exc_client:
             # Override state on this app instance
@@ -104,6 +107,8 @@ def test_middleware_exception_logging(tmp_path):
             assert "500" in log_content
             assert "Database connection failure" in log_content
     finally:
+        # Restore app state
+        app.state = original_state
         # Restore original log_dir so subsequent tests are not affected
         live_settings.log_dir = original_log_dir
         setup_logging(live_settings)

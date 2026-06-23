@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from ultralytics import YOLO
@@ -45,6 +46,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical("Failed to load YOLOv8 model during startup: %s", str(e), exc_info=True)
         raise SystemExit("Application startup failed due to model loading error.") from e
+
+    # Initialize global state for concurrency and queue management
+    app.state.inference_semaphore = asyncio.Semaphore(settings.max_concurrent_inferences)
+    app.state.active_inferences = 0
+    app.state.queued_inferences = 0
 
     yield
     
@@ -106,7 +112,14 @@ async def health_check():
     
     logger.debug("Health check requested: status=%s", status)
     
+    queued = getattr(app.state, "queued_inferences", 0)
+    
     return {
         "status": status,
-        "model_loaded": model_ready
+        "model_loaded": model_ready,
+        "metrics": {
+            "active_inferences": getattr(app.state, "active_inferences", 0),
+            "queued_inferences": queued,
+            "queue_capacity_remaining": max(0, settings.max_queue_size - queued)
+        }
     }
