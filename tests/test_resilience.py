@@ -22,6 +22,9 @@ def test_rate_limiting(test_client, mocker):
     """
     Test that the IP-based rate limiter returns 429 when the limit is exceeded.
     """
+    from app.utils.rate_limit import rate_limit_records
+    rate_limit_records.clear()
+    
     # Mock rate limit settings
     mocker.patch.object(settings, "rate_limit_requests", 2)
     mocker.patch.object(settings, "rate_limit_window_seconds", 60)

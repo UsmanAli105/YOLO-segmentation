@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 from fastapi import Request, HTTPException
 from app.config import settings
+from app.utils import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ async def check_rate_limit(request: Request):
     
     # Check limit
     if len(valid_timestamps) >= settings.rate_limit_requests:
+        if settings.enable_metrics:
+            metrics.RATE_LIMIT_VIOLATIONS.inc()
         logger.warning("Rate limit exceeded for IP: %s (%d requests in %ds)", 
                        client_ip, len(valid_timestamps), settings.rate_limit_window_seconds)
         raise HTTPException(
