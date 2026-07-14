@@ -62,7 +62,7 @@ services:
     # HTTP access (add 443 when HTTPS is configured)
     ports:
       - "80:80"
-      # - "443:443"  # Uncomment when HTTPS is configured
+      - "443:443"  # Uncomment when HTTPS is configured
 
     volumes:
       # Mount Nginx configuration
