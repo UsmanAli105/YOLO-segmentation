@@ -33,6 +33,14 @@ services:
 
     restart: unless-stopped
 
+    # Health check - essential for Nginx startup dependency
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
     networks:
       - backend
 
@@ -68,6 +76,11 @@ services:
       - nginx_logs:/var/log/nginx
 
     restart: unless-stopped
+
+    # Wait for FastAPI health check to pass
+    depends_on:
+      api:
+        condition: service_healthy
 
     networks:
       - backend
