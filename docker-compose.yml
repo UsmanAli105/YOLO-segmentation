@@ -3,8 +3,6 @@
 #  YOLO Segmentation API with Nginx Reverse Proxy
 # ─────────────────────────────────────────────────────────────
 
-version: '3.8'
-
 services:
   # ─────────────────────────────────────────────────────────────
   #  FastAPI Application (Internal Only)
