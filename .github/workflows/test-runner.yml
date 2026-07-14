@@ -1,0 +1,19 @@
+name: Test Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: [self-hosted, gcp, docker]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Environment
+        run: |
+          whoami
+          hostname
+          pwd
+          docker --version
+          docker compose version
