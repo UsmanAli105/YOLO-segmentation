@@ -112,3 +112,7 @@ benchmark_*.json
 # Jupyter Notebooks checkpoints
 # ============================================================
 .ipynb_checkpoints/
+
+
+*.md
+*.txt

@@ -33,10 +33,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install only the bare minimum runtime system dependencies for OpenCV
+# Install only the bare minimum runtime system dependencies for OpenCV and health checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0t64 \
+    curl \
  && rm -rf /var/lib/apt/lists/* \
  && apt-get clean
 
