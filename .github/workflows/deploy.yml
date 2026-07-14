@@ -1,85 +1,44 @@
-name: Deploy to AWS EC2
+name: Deploy Production
 
 on:
   push:
     branches:
       - main
 
+concurrency:
+  group: production
+  cancel-in-progress: true
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+
+    runs-on:
+      - self-hosted
+
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
+
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to EC2
-        env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ubuntu
+      - name: Show Environment
         run: |
-          # 1. Save the private key to a file and set permissions
-          mkdir -p ~/.ssh
-          echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          whoami
+          hostname
+          pwd
+          docker --version
+          docker compose version
 
-          # 2. Add the EC2 host to known_hosts to prevent SSH prompts
-          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
-
-          # 3. Rsync the project files to the EC2 instance
-          # This copies the latest code directly to ~/app
-          rsync -avz --delete \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            -e "ssh -i ~/.ssh/id_rsa" \
-            ./ $USER@$HOST:~/app/
-
-          # 4. SSH into the instance and deploy via Minikube Kubernetes
-          # Added keep-alive options so long builds don't drop the connection
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -i ~/.ssh/id_rsa $USER@$HOST << 'EOF'
-            cd ~/app
-            
-            # Ensure minikube is running (starts it if stopped)
-            minikube status || minikube start --driver=docker
-            
-            # Point docker CLI to the internal minikube docker daemon
-            eval $(minikube docker-env)
-            
-            # Build the latest image directly into the Kubernetes registry
-            docker build -t yolo-segmentation:latest .
-            
-            # Apply all Kubernetes manifests
-            kubectl apply -f kubernetes/
-            
-            # Force a rolling restart to ensure the new image is picked up
-            kubectl rollout restart deployment yolo-deployment -n yolo-segmentation
-            
-            # Wait for the rollout to complete
-            kubectl rollout status deployment/yolo-deployment -n yolo-segmentation
-            
-            # Expose the service on port 8000 so the Health Check job passes and it is publicly accessible
-            # Kill any existing port-forward processes first
-            pkill -f "kubectl port-forward.*yolo-service" || true
-            nohup kubectl port-forward --address 0.0.0.0 svc/yolo-service 8000:80 -n yolo-segmentation > /dev/null 2>&1 &
-            
-            # Clean up dangling images to save space
-            docker image prune -f
-          EOF
-
-      - name: Verify Deployment (Health Check)
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
+      - name: Deploy
         run: |
-          echo "Waiting for API to start..."
-          # Retry up to 12 times (waiting 5 seconds between each)
-          for i in {1..12}; do
-            if curl -sSf http://$HOST:8000/health > /dev/null; then
-              echo "✅ Health check passed! The API is live and responding."
-              exit 0
-            fi
-            echo "Health check pending... (Attempt $i/12)"
-            sleep 5
-          done
-          echo "❌ Health check failed after 60 seconds. The container might be crash-looping."
-          exit 1
+          docker compose pull
+          docker compose up -d --build
+
+      - name: Cleanup
+        run: |
+          docker image prune -f
+      - name: Health Check
+        run: |
+         sleep 10
+         curl http://localhost:8000/health
