@@ -5,8 +5,11 @@ on:
 
 jobs:
   test:
-    runs-on: [self-hosted, gcp, docker]
-
+    runs-on:
+      - self-hosted
+      - gcp
+      - docker
+      
     steps:
       - uses: actions/checkout@v4
 
