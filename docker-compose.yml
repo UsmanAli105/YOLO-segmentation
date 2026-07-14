@@ -68,8 +68,8 @@ services:
       # Mount Nginx configuration
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
-      # Mount certificates when HTTPS is enabled
-      # - ./docker/nginx/certs:/etc/nginx/certs:ro
+      # TLS certificates (generated on server via openssl)
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
       # Persist logs
       - nginx_logs:/var/log/nginx
 
