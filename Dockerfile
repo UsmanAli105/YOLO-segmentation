@@ -15,12 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # Copy requirements first (before pip upgrade)
 COPY requirements.txt .
 
-# Upgrade pip, setuptools, and wheel for latest package management
-RUN python -m pip install --upgrade pip setuptools wheel
-
-# Install python dependencies to a local folder prefix
-# The requirements.txt now enforces CPU-only PyTorch wheels
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# Upgrade pip, setuptools, wheel AND install requirements all to /install
+# This ensures packaging and all deps go to the same prefix
+RUN python -m pip install --no-cache-dir --prefix=/install pip setuptools wheel -r requirements.txt
 
 # Download YOLOv8 model weights
 RUN mkdir -p /models && \
