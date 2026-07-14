@@ -11,14 +11,12 @@ concurrency:
 
 jobs:
   deploy:
-
     runs-on:
       - self-hosted
 
     timeout-minutes: 30
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -30,15 +28,23 @@ jobs:
           docker --version
           docker compose version
 
+      - name: Pull Public Images
+        run: |
+          docker compose pull prometheus
+
+      - name: Build Application
+        run: |
+          docker compose build api
+
       - name: Deploy
         run: |
-          docker compose pull
-          docker compose up -d --build
+          docker compose up -d
 
       - name: Cleanup
         run: |
           docker image prune -f
+
       - name: Health Check
         run: |
-         sleep 10
-         curl http://localhost:8000/health
+          sleep 10
+          curl --fail http://localhost:8000/health

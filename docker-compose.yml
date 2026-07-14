@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: yolo_segmentation_api
     image: yolo-segmentation:latest
     ports:
