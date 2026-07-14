@@ -25,6 +25,16 @@ jobs:
 
     steps:
       # ─────────────────────────────────────────────────────────────
+      #  Pre-Checkout Cleanup (remove root-owned files from previous runs)
+      # ─────────────────────────────────────────────────────────────
+      - name: Remove Root-Owned Files from Previous Run
+        run: |
+          # Cert files may be owned by root if generated inside Docker or by a
+          # privileged process. Remove them so actions/checkout can clean the
+          # workspace without hitting EACCES permission errors.
+          sudo rm -rf "${{ github.workspace }}/docker/nginx/certs" || true
+
+      # ─────────────────────────────────────────────────────────────
       #  Environment Setup
       # ─────────────────────────────────────────────────────────────
       - name: Checkout Repository
@@ -63,6 +73,24 @@ jobs:
           docker image ls yolo-segmentation:latest
 
       # ─────────────────────────────────────────────────────────────
+      #  TLS Certificate (self-signed, generated once on the runner)
+      # ─────────────────────────────────────────────────────────────
+      - name: Generate TLS Certificate (if not present)
+        run: |
+          CERT_DIR="${{ github.workspace }}/docker/nginx/certs"
+          if [ ! -f "$CERT_DIR/cert.pem" ] || [ ! -f "$CERT_DIR/key.pem" ]; then
+            echo "Generating self-signed TLS certificate..."
+            mkdir -p "$CERT_DIR"
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+              -keyout "$CERT_DIR/key.pem" \
+              -out "$CERT_DIR/cert.pem" \
+              -subj "/C=US/ST=State/L=City/O=YOLOSegmentation/CN=localhost"
+            echo "✓ TLS certificate generated"
+          else
+            echo "✓ TLS certificate already exists, skipping generation"
+          fi
+
+      # ─────────────────────────────────────────────────────────────
       #  Deployment
       # ─────────────────────────────────────────────────────────────
       - name: Deploy Services (Docker Compose)
@@ -88,7 +116,7 @@ jobs:
       - name: Verify Fastapi Health Endpoint
         run: |
           echo "Checking FastAPI health endpoint..."
-          if curl --fail --max-time 10 http://localhost/health; then
+          if curl --fail --max-time 10 --insecure https://localhost/health; then
             echo "✓ FastAPI health check passed"
           else
             echo "✗ FastAPI health check failed"
@@ -98,7 +126,7 @@ jobs:
       - name: Verify Nginx Reverse Proxy
         run: |
           echo "Verifying Nginx is forwarding requests..."
-          RESPONSE=$(curl --fail --max-time 10 --silent http://localhost/health)
+          RESPONSE=$(curl --fail --max-time 10 --insecure --silent https://localhost/health)
           if echo "$RESPONSE" | grep -q "status"; then
             echo "✓ Nginx reverse proxy is working correctly"
           else
@@ -159,7 +187,7 @@ jobs:
           echo "╚════════════════════════════════════════╝"
           echo ""
           echo "Production deployment completed successfully!"
-          echo "API: http://localhost/health"
-          echo "Docs: http://localhost/docs"
-          echo "Metrics: http://localhost/metrics"
+          echo "API: https://localhost/health"
+          echo "Docs: https://localhost/docs"
+          echo "Metrics: https://localhost/metrics"
           echo ""
