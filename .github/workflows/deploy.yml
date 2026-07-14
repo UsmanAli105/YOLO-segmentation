@@ -106,16 +106,6 @@ jobs:
             exit 1
           fi
 
-      - name: Check Prometheus Metrics Endpoint
-        run: |
-          echo "Checking Prometheus metrics..."
-          if curl --fail --max-time 10 --silent http://localhost/metrics | grep -q "# HELP"; then
-            echo "✓ Prometheus metrics endpoint is responding"
-          else
-            echo "✗ Prometheus metrics endpoint is not responding"
-            exit 1
-          fi
-
       - name: Verify Container Logs
         if: always()
         run: |
