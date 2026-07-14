@@ -1,20 +1,41 @@
+# ─────────────────────────────────────────────────────────────
+#  Docker Compose Configuration - Production Deployment
+#  YOLO Segmentation API with Nginx Reverse Proxy
+# ─────────────────────────────────────────────────────────────
+
+version: '3.8'
+
 services:
+  # ─────────────────────────────────────────────────────────────
+  #  FastAPI Application (Internal Only)
+  # ─────────────────────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: yolo_segmentation_api
     image: yolo-segmentation:latest
-    ports:
-      - "8000:8000"
+    container_name: yolo_segmentation_api
+    
+    # Do NOT expose port 8000 to the host.
+    # Accessible only from the backend Docker network.
+    expose:
+      - "8000"
+
     environment:
-      - APP_ENV=local
+      - APP_ENV=prod
+      - PYTHONUNBUFFERED=1
+
     volumes:
-      # Persist runtime artifacts outside the container
-      - ./logs:/app/logs
-      - ./uploads:/app/uploads
-      - ./outputs:/app/outputs
+      # Persist runtime artifacts (bind mounts for data)
+      - api_logs:/app/logs
+      - api_uploads:/app/uploads
+      - api_outputs:/app/outputs
+
     restart: unless-stopped
+
+    # ─────────────────────────────────────────────────────────────
+    #  Health Check - Essential for orchestration
+    # ─────────────────────────────────────────────────────────────
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -22,16 +43,127 @@ services:
       retries: 3
       start_period: 20s
 
+    networks:
+      - backend
+
+    # Resource limits (optional but recommended for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 4G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 2G
+
+  # ─────────────────────────────────────────────────────────────
+  #  Nginx Reverse Proxy (Public Facing)
+  # ─────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.28-alpine
+    container_name: nginx_reverse_proxy
+    
+    # HTTP access (add 443 when HTTPS is configured)
+    ports:
+      - "80:80"
+      # - "443:443"  # Uncomment when HTTPS is configured
+
+    volumes:
+      # Mount Nginx configuration
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/nginx/conf.d:ro
+      # Mount certificates when HTTPS is enabled
+      # - ./docker/nginx/certs:/etc/nginx/certs:ro
+      # Persist logs
+      - nginx_logs:/var/log/nginx
+
+    restart: unless-stopped
+
+    # Wait for FastAPI health check to pass
+    depends_on:
+      api:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+    # Resource limits (optional but recommended for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.5'
+    #       memory: 512M
+    #     reservations:
+    #       cpus: '0.25'
+    #       memory: 256M
+
+  # ─────────────────────────────────────────────────────────────
+  #  Prometheus Metrics Collection
+  # ─────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
-    ports:
-      - "9090:9090"
+    
+    # Prometheus UI access (internal only for production)
+    expose:
+      - "9090"
+
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      # Mount configuration file (read-only)
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Persist metrics data in named volume
+      - prometheus_data:/prometheus
+
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+
     depends_on:
       - api
+
     restart: unless-stopped
+
+    networks:
+      - backend
+
+    # Resource limits (optional but recommended for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.5'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '0.25'
+    #       memory: 512M
+
+# ─────────────────────────────────────────────────────────────
+#  Custom Bridge Network (isolated from default)
+# ─────────────────────────────────────────────────────────────
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ─────────────────────────────────────────────────────────────
+#  Named Volumes (Persisted data survives container recreation)
+# ─────────────────────────────────────────────────────────────
+volumes:
+  # FastAPI application data
+  api_logs:
+    driver: local
+  api_uploads:
+    driver: local
+  api_outputs:
+    driver: local
+  
+  # Prometheus metrics database
+  prometheus_data:
+    driver: local
+  
+  # Nginx access and error logs
+  nginx_logs:
+    driver: local
 

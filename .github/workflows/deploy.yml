@@ -1,3 +1,8 @@
+# ─────────────────────────────────────────────────────────────
+#  GitHub Actions Workflow - Production Deployment
+#  Self-Hosted Runner on GCP Compute Engine (Ubuntu 24.04 LTS)
+# ─────────────────────────────────────────────────────────────
+
 name: Deploy Production
 
 on:
@@ -5,46 +10,176 @@ on:
     branches:
       - main
 
+# Prevent overlapping deployments
 concurrency:
   group: production
   cancel-in-progress: true
 
 jobs:
   deploy:
+    name: Build and Deploy to Production
     runs-on:
       - self-hosted
 
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      # ─────────────────────────────────────────────────────────────
+      #  Environment Setup
+      # ─────────────────────────────────────────────────────────────
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Show Environment
+      - name: Display Environment Information
         run: |
+          echo "=== System Information ==="
           whoami
           hostname
           pwd
+          uname -a
+          echo ""
+          echo "=== Docker Information ==="
           docker --version
           docker compose version
+          echo ""
+          echo "=== Disk Space ==="
+          df -h
 
-      - name: Pull Public Images
+      # ─────────────────────────────────────────────────────────────
+      #  Image Management
+      # ─────────────────────────────────────────────────────────────
+      - name: Pull Public Base Images
         run: |
+          echo "Pulling public images..."
           docker compose pull prometheus
+          docker pull nginx:1.28-alpine
+          echo "Public images pulled successfully"
 
-      - name: Build Application
+      - name: Build Application Image
         run: |
-          docker compose build api
+          echo "Building application image..."
+          docker compose build --no-cache api
+          echo "Application image built successfully"
+          docker image ls yolo-segmentation:latest
 
-      - name: Deploy
+      # ─────────────────────────────────────────────────────────────
+      #  Deployment
+      # ─────────────────────────────────────────────────────────────
+      - name: Deploy Services (Docker Compose)
         run: |
+          echo "Starting deployment..."
           docker compose up -d
+          echo "Services deployed"
+          echo ""
+          echo "=== Container Status ==="
+          docker compose ps
 
-      - name: Cleanup
+      - name: Wait for Services to Stabilize
         run: |
-          docker image prune -f
+          echo "Waiting for services to stabilize (15 seconds)..."
+          sleep 15
+          echo ""
+          echo "=== Running Containers ==="
+          docker ps
 
-      - name: Health Check
+      # ─────────────────────────────────────────────────────────────
+      #  Deployment Verification
+      # ─────────────────────────────────────────────────────────────
+      - name: Verify Fastapi Health Endpoint
         run: |
-          sleep 10
-          curl --fail http://localhost:8000/health
+          echo "Checking FastAPI health endpoint..."
+          if curl --fail --max-time 10 http://localhost/health; then
+            echo "✓ FastAPI health check passed"
+          else
+            echo "✗ FastAPI health check failed"
+            exit 1
+          fi
+
+      - name: Verify API Documentation
+        run: |
+          echo "Checking API documentation endpoint..."
+          if curl --fail --max-time 10 --silent http://localhost/docs > /dev/null; then
+            echo "✓ API documentation endpoint is accessible"
+          else
+            echo "✗ API documentation endpoint is not accessible"
+            exit 1
+          fi
+
+      - name: Verify Nginx Reverse Proxy
+        run: |
+          echo "Verifying Nginx is forwarding requests..."
+          RESPONSE=$(curl --fail --max-time 10 --silent http://localhost/health)
+          if echo "$RESPONSE" | grep -q "status"; then
+            echo "✓ Nginx reverse proxy is working correctly"
+          else
+            echo "✗ Nginx reverse proxy verification failed"
+            exit 1
+          fi
+
+      - name: Check Prometheus Metrics Endpoint
+        run: |
+          echo "Checking Prometheus metrics..."
+          if curl --fail --max-time 10 --silent http://localhost/metrics | grep -q "# HELP"; then
+            echo "✓ Prometheus metrics endpoint is responding"
+          else
+            echo "✗ Prometheus metrics endpoint is not responding"
+            exit 1
+          fi
+
+      - name: Verify Container Logs
+        if: always()
+        run: |
+          echo "=== Docker Compose Logs (last 50 lines) ==="
+          docker compose logs --tail=50
+          echo ""
+          echo "=== Container Status ==="
+          docker compose ps -a
+
+      # ─────────────────────────────────────────────────────────────
+      #  Cleanup
+      # ─────────────────────────────────────────────────────────────
+      - name: Clean Up Unused Docker Images
+        if: always()
+        run: |
+          echo "Cleaning up unused Docker images..."
+          docker image prune -f --filter "until=72h"
+          echo "Cleanup completed"
+          echo ""
+          echo "=== Remaining Images ==="
+          docker image ls
+
+      # ─────────────────────────────────────────────────────────────
+      #  Failure Handling
+      # ─────────────────────────────────────────────────────────────
+      - name: Print Logs on Deployment Failure
+        if: failure()
+        run: |
+          echo "=== DEPLOYMENT FAILED ==="
+          echo ""
+          echo "=== Docker Compose Status ==="
+          docker compose ps -a
+          echo ""
+          echo "=== Docker Compose Logs ==="
+          docker compose logs
+          echo ""
+          echo "=== System Resources ==="
+          free -h
+          df -h
+          echo ""
+          echo "=== Docker System Info ==="
+          docker system df
+          exit 1
+
+      - name: Deployment Success Notification
+        if: success()
+        run: |
+          echo ""
+          echo "╔════════════════════════════════════════╗"
+          echo "║   ✓ DEPLOYMENT SUCCESSFUL              ║"
+          echo "╚════════════════════════════════════════╝"
+          echo ""
+          echo "Production deployment completed successfully!"
+          echo "API: http://localhost/health"
+          echo "Docs: http://localhost/docs"
+          echo "Metrics: http://localhost/metrics"
+          echo ""
