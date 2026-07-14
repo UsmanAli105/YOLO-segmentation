@@ -17,7 +17,7 @@ COPY requirements.txt .
 
 # Upgrade pip, setuptools, wheel AND install requirements all to /install
 # This ensures packaging and all deps go to the same prefix
-RUN python -m pip install --no-cache-dir --prefix=/install pip setuptools wheel -r requirements.txt
+RUN python -m pip install --prefix=/install pip setuptools wheel -r requirements.txt
 
 # Download YOLOv8 model weights
 RUN mkdir -p /models && \
